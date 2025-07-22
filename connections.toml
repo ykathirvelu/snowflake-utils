@@ -1,0 +1,8 @@
+[TRIALAC]
+account = "ORG-account"
+account_name = "account"
+organization_name = "ORG"
+user = "User"
+authenticator = "snowflake"
+role = "ACCOUNTADMIN"
+password = "password"
