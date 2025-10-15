@@ -1,0 +1,50 @@
+USE ROLE ACCOUNTADMIN;
+USE DATABASE SNOWFLAKE;
+
+-- Using ACCOUNTADMIN, create a new role for this exercise and grant to applicable users
+CREATE OR REPLACE ROLE FEATURE_STORE_LAB_USER;
+BEGIN
+    LET current_user_name := CURRENT_USER();
+    EXECUTE IMMEDIATE 'GRANT ROLE FEATURE_STORE_LAB_USER TO USER ' || current_user_name;
+END;
+
+-- create our virtual warehouse
+CREATE OR REPLACE WAREHOUSE FEATURE_STORE_WH AUTO_SUSPEND = 60;
+
+GRANT ALL ON WAREHOUSE FEATURE_STORE_WH TO ROLE FEATURE_STORE_LAB_USER;
+
+-- use our feature_store_wh virtual warehouse 
+USE WAREHOUSE FEATURE_STORE_WH;
+
+-- Next create a new database and schema,
+CREATE OR REPLACE DATABASE FEATURE_STORE_DATABASE;
+CREATE OR REPLACE SCHEMA FEATURE_STORE_SCHEMA;
+
+GRANT OWNERSHIP ON DATABASE FEATURE_STORE_DATABASE TO ROLE FEATURE_STORE_LAB_USER COPY CURRENT GRANTS;
+GRANT OWNERSHIP ON ALL SCHEMAS IN DATABASE FEATURE_STORE_DATABASE  TO ROLE FEATURE_STORE_LAB_USER COPY CURRENT GRANTS;
+
+-- Setup is now complete
+
+
+SELECT
+        datetime_utc AS ts,
+        airport_zip_code,
+        SUM(rain_mm_h) OVER (
+            PARTITION BY airport_zip_code
+            ORDER BY datetime_utc
+            RANGE BETWEEN INTERVAL '30 minutes' PRECEDING AND CURRENT ROW
+        ) AS rain_sum_30m,
+        SUM(rain_mm_h) OVER (
+            PARTITION BY airport_zip_code
+            ORDER BY datetime_utc
+            RANGE BETWEEN INTERVAL '60 minutes' PRECEDING AND CURRENT ROW
+        ) AS rain_sum_60m
+    FROM airport_weather_station;
+
+    CREATE OR REPLACE DYNAMIC TABLE FEATURE_STORE_DATABASE.FEATURE_STORE_SCHEMA.F_WEATHER$1 
+(TS , AIRPORT_ZIP_CODE , RAIN_SUM_30M COMMENT 'The sum of rain fall over past 30 minutes for one zipcode.', RAIN_SUM_60M COMMENT 'The sum of rain fall over past 1 hour for one zipcode.') 
+TARGET_LAG = '1d' COMMENT = 'Airport weather features refreshed every day.' 
+TAG ( FEATURE_STORE_DATABASE.FEATURE_STORE_SCHEMA.SNOWML_FEATURE_STORE_OBJECT = '{"type": "MANAGED_FEATURE_VIEW", "pkg_version": "1.11.0"}', FEATURE_STORE_DATABASE.FEATURE_STORE_SCHEMA.SNOWML_FEATURE_VIEW_METADATA = '{"entities": ["AIRPORT_ZIP_CODE"], "timestamp_col": "TS"}', FEATURE_STORE_DATABASE.FEATURE_STORE_SCHEMA.SNOWML_FEATURE_STORE_ENTITY_AIRPORT_ZIP_CODE = 'AIRPORT_ZIP_CODE' ) 
+WAREHOUSE = FEATURE_STORE_WH REFRESH_MODE = AUTO INITIALIZE = ON_CREATE CLUSTER BY (AIRPORT_ZIP_CODE, TS) 
+AS SELECT datetime_utc AS ts, airport_zip_code, SUM(rain_mm_h) OVER ( PARTITION BY airport_zip_code ORDER BY datetime_utc RANGE BETWEEN INTERVAL '30 minutes' PRECEDING AND CURRENT ROW ) AS rain_sum_30m, SUM(rain_mm_h) OVER ( PARTITION BY airport_zip_code ORDER BY datetime_utc RANGE BETWEEN INTERVAL '60 minutes' PRECEDING AND CURRENT ROW ) AS rain_sum_60m 
+FROM airport_weather_station 
