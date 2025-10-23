@@ -59,7 +59,11 @@ CREATE OR REPLACE CATALOG INTEGRATION demo_open_catalog_int
     REST_AUTHENTICATION = (
     TYPE = OAUTH 
     OAUTH_CLIENT_ID = '1J8Lz1d9ghwNzHqErdQql7CY2a8=' 
+<<<<<<< local
     OAUTH_CLIENT_SECRET = '<OauthSecret>' 
+=======
+    OAUTH_CLIENT_SECRET = '<OauthSecret>' 
+>>>>>>> remote
     OAUTH_ALLOWED_SCOPES = ('PRINCIPAL_ROLE:ALL') 
       ) 
   ENABLED = TRUE;
